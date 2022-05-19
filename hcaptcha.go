@@ -24,7 +24,7 @@ type Config struct {
 	EnableUserIpValidation bool
 
 	//Optional. Custom error response function, defaulted to defaultErrResponse
-	ErrResp func(c *fiber.Ctx) error
+	ErrorResponse func(c *fiber.Ctx) error
 
 	//Optional. HTTPClient to call site verify of HCaptcha
 	Client *http.Client
@@ -55,12 +55,6 @@ func defaultErrResponse() fiber.Handler {
 	}
 }
 
-func defaultHttpClient() *http.Client {
-	return &http.Client{
-		Timeout: defaultHTTPTimeout,
-	}
-}
-
 // New validates the provided configuration and defaults missing parameters
 func New(cfg *Config) fiber.Handler {
 	if cfg.Secret == "" {
@@ -68,11 +62,11 @@ func New(cfg *Config) fiber.Handler {
 			return errors.New("mandatory parameter: secret key is missing")
 		}
 	}
-	if cfg.ErrResp == nil {
-		cfg.ErrResp = defaultErrResponse()
+	if cfg.ErrorResponse == nil {
+		cfg.ErrorResponse = defaultErrResponse()
 	}
 	if cfg.Client == nil {
-		cfg.Client = defaultHttpClient()
+		cfg.Client = &http.Client{Timeout: defaultHTTPTimeout}
 	}
 	if cfg.Url == "" {
 		cfg.Url = defaultUrl
@@ -81,7 +75,7 @@ func New(cfg *Config) fiber.Handler {
 		if cfg.validateCaptcha(c) {
 			return c.Next()
 		}
-		return cfg.ErrResp(c)
+		return cfg.ErrorResponse(c)
 	}
 }
 
@@ -96,7 +90,6 @@ type Response struct {
 }
 
 func (mw *Config) validateCaptcha(c *fiber.Ctx) bool {
-	a := fiber.AcquireAgent()
 	var formValues = url.Values{"secret": {mw.Secret}, "response": {c.FormValue("h-captcha-response")}}
 	if mw.EnableUserIpValidation {
 		formValues.Set("remoteip", c.IP())
